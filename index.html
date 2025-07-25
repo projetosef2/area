@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>Construtor de Terrenos</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: url('imagens/fundo.png') no-repeat center center fixed;
+    background-size: cover;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+  }
+  #container {
+    max-width: 700px;
+    margin: auto;
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 0 10px #aaa;
+  }
+  h1 {
+    color: #333;
+  }
+  canvas {
+    background: #f8f8f8;
+    border: 1px solid #ccc;
+    margin: 10px auto;
+    display: block;
+  }
+  .entrada {
+    margin: 10px 0;
+  }
+  input {
+    width: 100px;
+    padding: 5px;
+    font-size: 16px;
+  }
+  button {
+    padding: 10px 20px;
+    margin: 10px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;
+  }
+  #imagem-forma {
+    width: 80%;
+    max-height: 200px;
+    object-fit: contain;
+    margin-bottom: 15px;
+  }
+  #estrelas {
+    font-size: 24px;
+    color: gold;
+    margin: 10px 0;
+  }
+  #feedback {
+    font-size: 18px;
+    font-weight: bold;
+    margin: 10px 0;
+  }
+  #relatorio-btn {
+    background-color: #4CAF50;
+    color: white;
+    margin-top: 20px;
+    display: none;
+  }
+  #proximoBtn {
+    display: none;
+    background-color: #1976d2;
+    color: white;
+    border: none;
+  }
+  #jogo {
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="container">
+  <h1>🏗️ Construtor de Terrenos</h1>
+  <p id="boasVindas">Digite seu nome:</p>
+  <input id="nomeAluno" placeholder="Seu nome..." />
+  <button onclick="iniciarJogo()">Iniciar</button>
+  
+  <div id="jogo">
+    <p id="faseInfo"></p>
+    <h3 id="descricaoFase"></h3>
+    <img id="imagem-forma" src="" alt="Forma ilustrativa" />
+    <div id="entradas"></div>
+    <button onclick="verificar()">Testar Construção</button>
+    <p id="feedback"></p>
+    <div id="estrelas"></div>
+    <canvas id="canvas" width="400" height="250"></canvas>
+    <button id="proximoBtn" onclick="proximaFase()">Próxima Fase</button>
+    <button id="relatorio-btn" onclick="gerarPDF()">📄 Gerar Relatório PDF</button>
+    <button onclick="recomecar()" style="background-color:#f44336;color:white;">🔁 Recomeçar</button>
+  </div>
+</div>
+
+<!-- Sons -->
+<audio id="somAcerto" src="sons/acerto.mp3"></audio>
+<audio id="somErro" src="sons/erro.mp3"></audio>
+<audio id="somFundo" src="sons/fundo.mp3" loop></audio>
+
+<!-- Biblioteca jsPDF -->
+<script src="libs/jspdf.umd.min.js"></script>
+
+<script>
+let aluno = "";
+let faseAtual = 0;
+let fasesConcluidas = [];
+
+const fases = [
+  {
+    nome: "Retângulo",
+    imagem: "imagens/retangulo.png",
+    descricao: "Construa um terreno retangular com área de 72 m².",
+    entradas: ["largura", "altura"],
+    formula: (v) => v.largura * v.altura,
+    areaDesejada: 72,
+    desenhar: (ctx, v) => {
+      ctx.fillStyle = "#c2f0c2";
+      ctx.fillRect(50, 50, v.largura * 10, v.altura * 10);
+      ctx.strokeRect(50, 50, v.largura * 10, v.altura * 10);
+    }
+  },
+  {
+    nome: "Triângulo",
+    imagem: "imagens/triangulo.png",
+    descricao: "Lote triangular com área de 60 m².",
+    entradas: ["base", "altura"],
+    formula: (v) => (v.base * v.altura) / 2,
+    areaDesejada: 60,
+    desenhar: (ctx, v) => {
+      ctx.fillStyle = "#ffcccc";
+      ctx.beginPath();
+      ctx.moveTo(50, 200);
+      ctx.lineTo(50 + v.base * 10, 200);
+      ctx.lineTo(50, 200 - v.altura * 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  },
+  {
+    nome: "Círculo",
+    imagem: "imagens/circulo.png",
+    descricao: "Canteiro circular com 154 m².",
+    entradas: ["raio"],
+    formula: (v) => 3.14 * v.raio * v.raio,
+    areaDesejada: 154,
+    desenhar: (ctx, v) => {
+      ctx.fillStyle = "#d0e0ff";
+      ctx.beginPath();
+      ctx.arc(200, 125, v.raio * 10, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.stroke();
+    }
+  },
+  {
+    nome: "Trapézio",
+    imagem: "imagens/trapezio.png",
+    descricao: "Área trapezoidal de 96 m².",
+    entradas: ["baseMaior", "baseMenor", "altura"],
+    formula: (v) => ((v.baseMaior + v.baseMenor) * v.altura) / 2,
+    areaDesejada: 96,
+    desenhar: (ctx, v) => {
+      ctx.fillStyle = "#f7b2b7";
+      ctx.beginPath();
+      ctx.moveTo(50, 200);
+      ctx.lineTo(50 + v.baseMaior * 10, 200);
+      ctx.lineTo(50 + v.baseMenor * 10 + 10, 200 - v.altura * 10);
+      ctx.lineTo(40, 200 - v.altura * 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  },
+  {
+    nome: "Setor Circular",
+    imagem: "imagens/setor.png",
+    descricao: "Setor circular (metade do círculo) com 78.5 m².",
+    entradas: ["raio"],
+    formula: (v) => 0.5 * 3.14 * v.raio * v.raio,
+    areaDesejada: 78.5,
+    desenhar: (ctx, v) => {
+      ctx.fillStyle = "#ffcbf2";
+      ctx.beginPath();
+      ctx.moveTo(200, 125);
+      ctx.arc(200, 125, v.raio * 10, 0, Math.PI);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  },
+  {
+    nome: "Paralelogramo",
+    imagem: "imagens/paralelogramo.png",
+    descricao: "Área de plantio de 108 m².",
+    entradas: ["base", "altura"],
+    formula: (v) => v.base * v.altura,
+    areaDesejada: 108,
+    desenhar: (ctx, v) => {
+      ctx.fillStyle = "#e6ccff";
+      ctx.beginPath();
+      ctx.moveTo(50, 200);
+      ctx.lineTo(50 + v.base * 10, 200);
+      ctx.lineTo(50 + v.base * 10 - 20, 200 - v.altura * 10);
+      ctx.lineTo(30, 200 - v.altura * 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  },
+  {
+    nome: "Trapézio (Rampa)",
+    imagem: "imagens/meio_trapezio.png",
+    descricao: "Rampa inclinada com 48 m².",
+    entradas: ["baseMaior", "baseMenor", "altura"],
+    formula: (v) => 0.5 * ((v.baseMaior + v.baseMenor) * v.altura),
+    areaDesejada: 48,
+    desenhar: (ctx, v) => {
+      ctx.fillStyle = "#ffd6a5";
+      ctx.beginPath();
+      ctx.moveTo(50, 200);
+      ctx.lineTo(50 + v.baseMaior * 10, 200);
+      ctx.lineTo(50 + v.baseMenor * 10, 200 - v.altura * 10);
+      ctx.lineTo(50, 200 - v.altura * 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  },
+  {
+    nome: "Anel Circular",
+    imagem: "imagens/anel.png",
+    descricao: "Pista de caminhada com 314 m².",
+    entradas: ["raioExterno", "raioInterno"],
+    formula: (v) => 3.14 * (v.raioExterno ** 2 - v.raioInterno ** 2),
+    areaDesejada: 314,
+    desenhar: (ctx, v) => {
+      ctx.fillStyle = "#caffbf";
+      ctx.beginPath();
+      ctx.arc(200, 125, v.raioExterno * 10, 0, 2 * Math.PI);
+      ctx.arc(200, 125, v.raioInterno * 10, 0, 2 * Math.PI, true);
+      ctx.fill();
+      ctx.stroke();
+    }
+  },
+  {
+    nome: "Retângulo + Semicírculo",
+    imagem: "imagens/retangulo_semicirculo.png",
+    descricao: "Praça com 200 m².",
+    entradas: ["largura", "altura"],
+    formula: (v) => (v.largura * v.altura) + 0.5 * 3.14 * Math.pow(v.largura / 2, 2),
+    areaDesejada: 200,
+    desenhar: (ctx, v) => {
+      ctx.fillStyle = "#b2f7ef";
+      ctx.fillRect(100, 100, v.largura * 10, v.altura * 10);
+      ctx.beginPath();
+      ctx.arc(100 + v.largura * 5, 100, v.largura * 5, Math.PI, 0);
+      ctx.lineTo(100 + v.largura * 10, 100);
+      ctx.fill();
+      ctx.stroke();
+    }
+  },
+  {
+    nome: "Triângulo Escaleno",
+    imagem: "imagens/triangulo_escaleno.png",
+    descricao: "Terreno irregular com 84 m².",
+    entradas: ["base", "altura"],
+    formula: (v) => (v.base * v.altura) / 2,
+    areaDesejada: 84,
+    desenhar: (ctx, v) => {
+      ctx.fillStyle = "#dee2ff";
+      ctx.beginPath();
+      ctx.moveTo(50, 200);
+      ctx.lineTo(50 + v.base * 10, 200);
+      ctx.lineTo(50 + 30, 200 - v.altura * 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+];
+
+function iniciarJogo() {
+  aluno = document.getElementById("nomeAluno").value.trim();
+  if (!aluno) {
+    alert("Por favor, digite seu nome!");
+    return;
+  }
+  document.getElementById("jogo").style.display = "block";
+  document.getElementById("boasVindas").style.display = "none";
+  document.getElementById("nomeAluno").style.display = "none";
+  document.getElementById("somFundo").play();
+  carregarFase();
+}
+
+function carregarFase() {
+  const f = fases[faseAtual];
+  document.getElementById("faseInfo").innerText = `Fase ${faseAtual + 1} - ${f.nome}`;
+  document.getElementById("descricaoFase").innerText = f.descricao;
+  document.getElementById("imagem-forma").src = f.imagem;
+  document.getElementById("feedback").innerText = "";
+  document.getElementById("estrelas").innerText = "";
+  document.getElementById("proximoBtn").style.display = "none";
+  document.getElementById("relatorio-btn").style.display = "none";
+
+  const entradasHTML = f.entradas.map(id =>
+    `<div class="entrada">${id}: <input type="number" id="${id}" step="0.1" value="1" min="0.1" /></div>`
+  ).join("");
+  document.getElementById("entradas").innerHTML = entradasHTML;
+
+  limparCanvas();
+}
+
+function verificar() {
+  const f = fases[faseAtual];
+  const valores = {};
+  for (const id of f.entradas) {
+    const val = parseFloat(document.getElementById(id).value);
+    if (isNaN(val) || val <= 0) {
+      alert("Preencha todos os campos corretamente com valores positivos.");
+      return;
+    }
+    valores[id] = val;
+  }
+
+  const area = f.formula(valores);
+  const erro = Math.abs(area - f.areaDesejada);
+  const ctx = document.getElementById("canvas").getContext("2d");
+  limparCanvas();
+  f.desenhar(ctx, valores);
+
+  const feedback = document.getElementById("feedback");
+  const estrelas = document.getElementById("estrelas");
+  let estrelasQtd = 0;
+
+  if (erro <= 1) estrelasQtd = 3;
+  else if (erro <= 3) estrelasQtd = 2;
+  else if (erro <= 6) estrelasQtd = 1;
+
+  if (estrelasQtd > 0) {
+    feedback.innerText = `✅ Área calculada: ${area.toFixed(2)} m² (esperado: ${f.areaDesejada} m²)`;
+    estrelas.innerText = "⭐".repeat(estrelasQtd);
+    fasesConcluidas[faseAtual] = {
+      nome: f.nome,
+      areaCalculada: area.toFixed(2),
+      areaEsperada: f.areaDesejada,
+      estrelas: estrelasQtd
+    };
+    document.getElementById("proximoBtn").style.display = "inline-block";
+    document.getElementById("somAcerto").play();
+  } else {
+    feedback.innerText = `❌ Área calculada: ${area.toFixed(2)} m² (esperado: ${f.areaDesejada} m²). Tente novamente.`;
+    estrelas.innerText = "";
+    document.getElementById("somErro").play();
+  }
+
+  if (faseAtual === fases.length - 1 && estrelasQtd > 0) {
+    document.getElementById("relatorio-btn").style.display = "inline-block";
+  }
+}
+
+function proximaFase() {
+  faseAtual++;
+  if (faseAtual < fases.length) {
+    carregarFase();
+  } else {
+    alert("Parabéns! Você concluiu todas as fases.");
+  }
+}
+
+function limparCanvas() {
+  const ctx = document.getElementById("canvas").getContext("2d");
+  ctx.clearRect(0, 0, 400, 250);
+}
+
+function gerarPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  doc.setFontSize(18);
+  doc.text(`Relatório do aluno: ${aluno}`, 10, 20);
+  doc.setFontSize(14);
+  let y = 40;
+
+  fasesConcluidas.forEach((fase, i) => {
+    doc.text(`Fase ${i + 1} - ${fase.nome}`, 10, y);
+    y += 7;
+    doc.text(`Área Calculada: ${fase.areaCalculada} m²`, 10, y);
+    y += 7;
+    doc.text(`Área Esperada: ${fase.areaEsperada} m²`, 10, y);
+    y += 7;
+    doc.text(`Estrelas: ${"⭐".repeat(fase.estrelas)}`, 10, y);
+    y += 12;
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+    }
+  });
+
+  const data = new Date();
+  doc.text(`Data: ${data.toLocaleDateString()} ${data.toLocaleTimeString()}`, 10, y);
+  doc.save(`relatorio_${aluno.replace(/\s/g, "_")}.pdf`);
+}
+
+function recomecar() {
+  faseAtual = 0;
+  fasesConcluidas = [];
+  document.getElementById("jogo").style.display = "none";
+  document.getElementById("boasVindas").style.display = "block";
+  document.getElementById("nomeAluno").style.display = "inline-block";
+  document.getElementById("nomeAluno").value = "";
+  document.getElementById("somFundo").pause();
+  document.getElementById("somFundo").currentTime = 0;
+}
+</script>
+
+</body>
+</html>
